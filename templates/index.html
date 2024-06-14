@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+
+    <link
+      rel="icon"
+      type="image/png"
+      href="{{ url_for('static', filename='Asset 1.png') }}"
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Carlito:ital,wght@0,400;0,700;1,400&family=Kumbh+Sans:wght@100;200;300;400;500;600;700;800&family=Lato:ital,wght@0,100;0,300;0,400;0,700;1,400;1,700&family=Open+Sans:ital,wght@0,300;0,400;0,500;1,300&family=Poppins:wght@100;200;300;400;500;600;700;800&family=Red+Hat+Display:wght@300;400;500&family=Roboto:wght@100;400;500;700;900&family=Vujahday+Script&display=swap"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Histogram Equalization - Nhóm 5BOYS</title>
+  </head>
+  <style>
+    body {
+      font-family: "Roboto", sans-serif;
+      background-color: #222;
+      margin: 0;
+      padding: 0;
+    }
+
+    h1 {
+      font-size: 36px;
+      text-align: center;
+      margin: 20px 0;
+      padding-top: 20px;
+      color: #fff;
+    }
+
+    form {
+      background-color: #fff;
+      box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 20px;
+      border-radius: 5px;
+      text-align: center;
+    }
+
+    label {
+      font-size: 20px;
+      display: block;
+      margin: 10px 0;
+    }
+
+    input[type="file"],
+    input[type="submit"] {
+      font-size: 16px;
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      margin: 5px 0;
+    }
+
+    input[type="submit"] {
+      background-color: #007bff;
+      color: #fff;
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    input[type="submit"]:hover {
+      background-color: #0056b3;
+    }
+
+    .result-image {
+      display: none; /* Ẩn toàn bộ phần này ban đầu */
+      flex-direction: row;
+      justify-content: space-around;
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .result-image img {
+      max-width: 450px;
+      border-radius: 10px;
+    }
+
+    .result-image h2 {
+      color: #fff;
+      padding: 20px 0;
+    }
+
+    .chart-container {
+      display: none; /* Ẩn biểu đồ ban đầu */
+      text-align: center;
+    }
+
+    .histogram-chart {
+      max-width: 400px;
+      max-height: 300px;
+      border-radius: 10px;
+      background-color: #fff;
+      margin-top: 10px;
+    }
+  </style>
+  <body>
+    <h1>Ứng dụng Histogram Equalization</h1>
+
+    <form action="/process" method="post" enctype="multipart/form-data">
+      <label for="image">Chọn hình ảnh:</label>
+      <input type="file" name="image" accept="image/*" required />
+      <br />
+      <label for="brightness"
+        >Độ sáng: <span id="brightnessValue">50</span></label
+      >
+      <input
+        type="range"
+        name="brightness"
+        min="0"
+        max="100"
+        value="50"
+        step="1"
+        oninput="updateBrightness(this.value)"
+      />
+      <input
+        type="number"
+        name="brightness"
+        id="brightnessSlider"
+        value="50"
+        oninput="updateBrightness(this.value)"
+      />
+      <input type="submit" value="Xử lý" />
+    </form>
+
+    <div class="result-image">
+      <div class="chart-container">
+        <h2>Ảnh gốc:</h2>
+        <img id="originalImage" src="" alt="Ảnh gốc" title="Ảnh gốc" />
+      </div>
+      <div>
+        <h2>Ảnh Greyscale:</h2>
+        <img
+          id="greyscaleImage"
+          src=""
+          alt="Ảnh Greyscale"
+          title="Ảnh Greyscale"
+        />
+        <canvas class="histogram-chart" id="histogramChartGreyscale"></canvas>
+      </div>
+      <div>
+        <h2>Ảnh tăng độ sáng:</h2>
+
+        <img
+          id="brightnessImage"
+          src=""
+          alt="Ảnh tăng độ sáng"
+          title="Ảnh tăng độ sáng"
+        />
+
+        <canvas class="histogram-chart" id="histogramChartBrightness"></canvas>
+      </div>
+    </div>
+
+    <script>
+      const form = document.querySelector("form");
+      const brightnessSlider = document.getElementById("brightnessSlider");
+      const brightnessValue = document.getElementById("brightnessValue");
+      const images = document.querySelectorAll(".result-image img");
+      const resultImages = document.querySelector(".result-image");
+
+      const greyscaleHistogramCanvas = document.getElementById(
+        "histogramChartGreyscale"
+      );
+      let greyscaleChart = createHistogramChart(greyscaleHistogramCanvas);
+
+      const brightnessHistogramCanvas = document.getElementById(
+        "histogramChartBrightness"
+      );
+      let brightnessChart = createHistogramChart(brightnessHistogramCanvas);
+
+      function updateBrightness(value) {
+        value = Math.min(100, Math.max(0, value));
+        brightnessSlider.value = value;
+        brightnessValue.innerText = value;
+        const formData = new FormData(form);
+        formData.set("brightness", value);
+
+        fetch("/process", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            images[2].src = `data:image/png;base64, ${result.increased_brightness_image}`;
+            updateChart(brightnessChart, result.increased_brightness_histogram);
+          });
+      }
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const formData = new FormData(form);
+
+        fetch("/process", {
+          method: "POST",
+          body: formData,
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            document.getElementById(
+              "originalImage"
+            ).src = `data:image/png;base64, ${data.original_image}`;
+            document.getElementById(
+              "greyscaleImage"
+            ).src = `data:image/png;base64, ${data.processed_image}`;
+            document.getElementById(
+              "brightnessImage"
+            ).src = `data:image/png;base64, ${data.increased_brightness_image}`;
+            updateChart(greyscaleChart, data.greyscale_histogram);
+            updateChart(brightnessChart, data.increased_brightness_histogram);
+
+            // Khi nhấn xử lý, hiển thị phần kết quả
+            resultImages.style.display = "flex";
+            document
+              .querySelectorAll(".chart-container")
+              .forEach((container) => {
+                container.style.display = "block";
+              });
+          });
+      });
+
+      function createHistogramChart(canvas) {
+        return new Chart(canvas.getContext("2d"), {
+          type: "bar",
+          data: {
+            labels: Array.from({ length: 256 }, (_, i) => i.toString()),
+            datasets: [
+              {
+                label: "Histogram",
+                data: [],
+                backgroundColor: "rgba(75, 192, 192, 0.2)",
+                borderColor: "rgba(75, 192, 192, 1)",
+                borderWidth: 2,
+                pointRadius: 3,
+              },
+            ],
+          },
+          options: {
+            scales: {
+              x: {
+                beginAtZero: true,
+              },
+              y: {
+                beginAtZero: true,
+              },
+            },
+          },
+        });
+      }
+
+      function updateChart(chart, histogramData) {
+        chart.data.datasets[0].data = histogramData;
+        chart.update();
+      }
+    </script>
+  </body>
+</html>
